@@ -20,6 +20,7 @@
       </div>
       <div class="menu-buttons">
         <button id="create-match-btn" class="btn btn-primary">Create Match</button>
+        <button id="play-vs-bot-btn" class="btn btn-bot">PLAY VS BOT</button>
         <button id="join-match-btn" class="btn btn-secondary">Join Match</button>
         <button id="settings-btn" class="btn btn-tertiary">Settings</button>
       </div>
@@ -60,10 +61,47 @@
           <label>Jump Level: <span id="lobby-jump-value">1.0</span></label>
           <input type="range" id="lobby-jump-input" min="0.5" max="3.0" step="0.1" value="1.0">
         </div>
+
+        <!-- Bot Settings (Visible only in VS BOT mode) -->
+        <div id="bot-settings-section" class="bot-settings-section hidden">
+          <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+          <h3>BOT Settings</h3>
+          <div class="setting-item">
+            <label>Bot Difficulty:</label>
+            <select id="lobby-bot-difficulty" class="code-input">
+              <option value="FACILE">Facile</option>
+              <option value="MEDIO" selected>Medio</option>
+              <option value="DIFFICILE">Difficile</option>
+              <option value="VETERANO">Veterano</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>Number of Bots: <span id="lobby-bot-count-value">4</span></label>
+            <input type="range" id="lobby-bot-count-input" min="1" max="11" step="1" value="4">
+          </div>
+          <div class="setting-item">
+            <label>Bot Mode:</label>
+            <select id="lobby-bot-mode" class="code-input">
+              <option value="COOP_BOT">Co-op (Players vs Bots)</option>
+              <option value="DEATHMATCH_BOT">Deathmatch (Free For All)</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>Score Limit: <span id="lobby-bot-score-value">10</span></label>
+            <input type="range" id="lobby-bot-score-input" min="5" max="50" step="5" value="10">
+          </div>
+          <div class="setting-item">
+            <label>Time Limit: <span id="lobby-bot-time-value">180</span>s</label>
+            <input type="range" id="lobby-bot-time-input" min="60" max="600" step="60" value="180">
+          </div>
+        </div>
         <p style="color: #00ffff; margin-top: 10px;">Mode: Infinite Deathmatch</p>
       </div>
       <p class="lobby-status" id="lobby-status">Waiting for player to join...</p>
-      <button id="lobby-cancel-btn" class="btn btn-secondary">Cancel</button>
+      <div class="menu-buttons">
+        <button id="lobby-start-btn" class="btn btn-primary hidden">Start Match</button>
+        <button id="lobby-cancel-btn" class="btn btn-secondary">Cancel</button>
+      </div>
     </div>
   </div>
 

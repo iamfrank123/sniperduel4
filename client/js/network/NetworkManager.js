@@ -116,9 +116,41 @@ export class NetworkManager extends EventTarget {
                     this.playerId = response.playerId;
                     this.sessionToken = response.sessionToken;
 
-                    // Dispatch event so main.js can handle it
                     this.dispatchEvent(new CustomEvent('matchCreated', { detail: response }));
+                    resolve(response);
+                } else {
+                    reject(response.error);
+                }
+            });
+        });
+    }
 
+    async createBotMatch(settings = {}) {
+        if (!this.socket) this.connect();
+
+        if (!this.connected) {
+            await new Promise(resolve => {
+                this.addEventListener('connect', () => resolve(), { once: true });
+                setTimeout(() => resolve(), 5000);
+            });
+        }
+
+        return new Promise((resolve, reject) => {
+            const botSettings = {
+                ...settings,
+                matchMode: 'COOP_BOT',
+                botCount: 4,
+                botDifficulty: 'MEDIO',
+                roundTime: 180,
+                rounds: 10
+            };
+            this.socket.emit('createMatch', botSettings, (response) => {
+                if (response.success) {
+                    this.matchId = response.matchId;
+                    this.playerId = response.playerId;
+                    this.sessionToken = response.sessionToken;
+
+                    this.dispatchEvent(new CustomEvent('matchCreated', { detail: response }));
                     resolve(response);
                 } else {
                     reject(response.error);
@@ -187,6 +219,12 @@ export class NetworkManager extends EventTarget {
     sendUpdateSettings(settings) {
         if (this.socket && this.connected) {
             this.socket.emit('updateSettings', settings);
+        }
+    }
+
+    sendStartGame() {
+        if (this.socket && this.connected) {
+            this.socket.emit('startGame');
         }
     }
 

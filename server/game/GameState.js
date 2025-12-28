@@ -1,6 +1,7 @@
 import { HitDetection } from './HitDetection.js';
 import { GAME_CONSTANTS, MATCH_STATUS } from '../../shared/constants.js';
 import { MAP_GEOMETRY, checkMapCollision } from '../../shared/MapData.js';
+import { BotAI } from './BotAI.js';
 
 export class GameState {
     constructor(matchId, inviteCode, io, settings = {}) {
@@ -17,6 +18,13 @@ export class GameState {
         this.infiniteAmmo = settings.infiniteAmmo || false;
         this.movementSpeed = settings.movementSpeed || 1.0;
         this.jumpLevel = settings.jumpLevel || 1.0;
+        this.roundTime = settings.roundTime || GAME_CONSTANTS.ROUND_TIME;
+
+        // Bot Settings
+        this.matchMode = settings.matchMode || 'PVP';
+        this.botDifficulty = settings.botDifficulty || 'MEDIO';
+        this.botCount = settings.botCount !== undefined ? settings.botCount : (this.matchMode.includes('BOT') ? 4 : 0);
+        this.bots = []; // BotAI instances
 
         this.round = 1;
         this.scores = {}; // playerId -> score
@@ -60,9 +68,17 @@ export class GameState {
 
     startGame() {
         if (this.status !== MATCH_STATUS.WAITING) return;
-        if (this.players.size < 2) return;
+
+        const minPlayers = this.matchMode === 'PVP' ? 2 : 1;
+        if (this.players.size < minPlayers) return;
+
+        console.log(`Starting game in ${this.matchMode} mode with ${this.botCount} bots.`);
 
         this.status = MATCH_STATUS.IN_PROGRESS;
+
+        if (this.matchMode !== 'PVP' && this.botCount > 0) {
+            this.initializeBots();
+        }
         // Notify clients FIRST so they initialize the game
         this.io.to(this.matchId).emit('gameStart', {
             round: this.round,
@@ -78,7 +94,7 @@ export class GameState {
 
     startRound() {
         this.roundStartTime = Date.now();
-        this.timeRemaining = GAME_CONSTANTS.ROUND_TIME;
+        this.timeRemaining = this.roundTime;
 
         // Reset players
         for (const [playerId, player] of this.players) {
@@ -123,12 +139,18 @@ export class GameState {
 
         // Update time
         const elapsed = (Date.now() - this.roundStartTime) / 1000;
-        this.timeRemaining = Math.max(0, GAME_CONSTANTS.ROUND_TIME - elapsed);
+        this.timeRemaining = Math.max(0, this.roundTime - elapsed);
 
         // Check time limit
         if (this.timeRemaining <= 0) {
             this.endRound('TIME_LIMIT', null);
             return;
+        }
+
+        // Update bots
+        const deltaTime = GAME_CONSTANTS.TICK_INTERVAL / 1000;
+        for (const bot of this.bots) {
+            bot.update(deltaTime);
         }
 
         // Save state snapshot for lag compensation
@@ -174,7 +196,8 @@ export class GameState {
                 rotation: player.rotation,
                 health: player.health,
                 isDead: player.isDead,
-                nickname: player.nickname // Include nickname
+                nickname: player.nickname,
+                isBot: player.isBot || false
             };
         }
 
@@ -279,7 +302,8 @@ export class GameState {
                     hitbox: hitResult.hitbox,
                     damage,
                     fatal,
-                    impactPoint: hitResult.impactPoint
+                    impactPoint: hitResult.impactPoint,
+                    isShooterBot: shooter.isBot || false
                 });
             }
         }
@@ -335,6 +359,12 @@ export class GameState {
         if (settings.movementSpeed !== undefined) this.movementSpeed = settings.movementSpeed;
         if (settings.jumpLevel !== undefined) this.jumpLevel = settings.jumpLevel;
 
+        if (settings.matchMode !== undefined) this.matchMode = settings.matchMode;
+        if (settings.botDifficulty !== undefined) this.botDifficulty = settings.botDifficulty;
+        if (settings.botCount !== undefined) this.botCount = settings.botCount;
+        if (settings.botMode !== undefined) this.matchMode = settings.botMode;
+        if (settings.roundTime !== undefined) this.roundTime = settings.roundTime;
+
         // Broadcast update to all players
         this.io.to(this.matchId).emit('settingsUpdated', {
             settings: {
@@ -342,7 +372,11 @@ export class GameState {
                 autoRematch: this.autoRematch,
                 infiniteAmmo: this.infiniteAmmo,
                 movementSpeed: this.movementSpeed,
-                jumpLevel: this.jumpLevel
+                jumpLevel: this.jumpLevel,
+                roundTime: this.roundTime,
+                matchMode: this.matchMode,
+                botDifficulty: this.botDifficulty,
+                botCount: this.botCount
             }
         });
     }
@@ -371,7 +405,7 @@ export class GameState {
     resetMatch() {
         this.status = MATCH_STATUS.WAITING;
         this.round = 1;
-        this.timeRemaining = GAME_CONSTANTS.ROUND_TIME;
+        this.timeRemaining = this.roundTime;
 
         // Reset players and scores
         for (const [id, p] of this.players) {
@@ -453,5 +487,40 @@ export class GameState {
         const randomPoint = points[Math.floor(Math.random() * points.length)];
 
         return { ...randomPoint };
+    }
+
+    getSpawnPoints() {
+        return MAP_GEOMETRY.SPAWN_POINTS;
+    }
+
+    initializeBots() {
+        const botCount = Math.min(this.botCount, GAME_CONSTANTS.MAX_PLAYERS - this.players.size);
+        console.log(`Initializing ${botCount} bots...`);
+        for (let i = 0; i < botCount; i++) {
+            const botId = `bot_${i + 1}`;
+            const nickname = `bot${i + 1}`;
+            const spawnPosition = this.getSpawnPosition();
+
+            const botState = {
+                id: botId,
+                socket: null, // No socket for bots
+                isBot: true,
+                nickname: nickname,
+                position: { x: spawnPosition.x, y: spawnPosition.y, z: spawnPosition.z },
+                rotation: { pitch: 0, yaw: spawnPosition.yaw || 0 },
+                velocity: { x: 0, y: 0, z: 0 },
+                health: GAME_CONSTANTS.MAX_HEALTH,
+                ammo: this.infiniteAmmo ? 999 : GAME_CONSTANTS.MAGAZINE_SIZE,
+                reserveAmmo: this.infiniteAmmo ? 999 : GAME_CONSTANTS.RESERVE_AMMO,
+                isScoped: false,
+                isDead: false
+            };
+
+            this.players.set(botId, botState);
+            this.scores[botId] = 0;
+
+            const botAI = new BotAI(botState, this);
+            this.bots.push(botAI);
+        }
     }
 }

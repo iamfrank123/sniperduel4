@@ -39,7 +39,7 @@ export const GAME_CONSTANTS = {
     // Network
     TICK_RATE: 30,
     TICK_INTERVAL: 1000 / 30,
-    MAX_PLAYERS: 6,
+    MAX_PLAYERS: 12,
     MAX_LAG_COMPENSATION: 250,
     INTERPOLATION_DELAY: 100,
 
@@ -94,4 +94,17 @@ export const PACKET_TYPES = {
     ROUND_START: 'ROUND_START',
     ROUND_END: 'ROUND_END',
     MATCH_END: 'MATCH_END'
+};
+
+export const BOT_DIFFICULTY = {
+    FACILE: 'FACILE',
+    MEDIO: 'MEDIO',
+    DIFFICILE: 'DIFFICILE',
+    VETERANO: 'VETERANO'
+};
+
+export const MATCH_MODES = {
+    PVP: 'PVP',
+    COOP_BOT: 'COOP_BOT',
+    DEATHMATCH_BOT: 'DEATHMATCH_BOT'
 };

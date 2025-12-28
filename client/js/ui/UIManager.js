@@ -21,6 +21,7 @@ export class UIManager extends EventTarget {
 
         // Main Menu
         this.createMatchBtn = document.getElementById('create-match-btn');
+        this.playVsBotBtn = document.getElementById('play-vs-bot-btn');
         this.joinMatchBtn = document.getElementById('join-match-btn');
         this.settingsBtn = document.getElementById('settings-btn');
 
@@ -66,8 +67,28 @@ export class UIManager extends EventTarget {
 
         // Lobby Elements
         this.lobbyCode = document.getElementById('lobby-code');
-        this.lobbyStatus = document.getElementById('lobby-status');
         this.copyCodeBtn = document.getElementById('copy-code-btn');
+        this.lobbyJumpValue = document.getElementById('lobby-jump-value');
+        this.lobbyJumpInput = document.getElementById('lobby-jump-input');
+        this.lobbySpeedValue = document.getElementById('lobby-speed-value');
+        this.lobbySpeedInput = document.getElementById('lobby-speed-input');
+        this.lobbyRoundsInput = document.getElementById('lobby-rounds-input');
+        this.lobbyAutoRematchCheck = document.getElementById('lobby-auto-rematch');
+        this.lobbyInfiniteAmmoCheck = document.getElementById('lobby-infinite-ammo');
+
+        // Bot Settings
+        this.botSettingsSection = document.getElementById('bot-settings-section');
+        this.botDifficultyInput = document.getElementById('lobby-bot-difficulty');
+        this.botCountValue = document.getElementById('lobby-bot-count-value');
+        this.botCountInput = document.getElementById('lobby-bot-count-input');
+        this.botModeInput = document.getElementById('lobby-bot-mode');
+        this.botScoreValue = document.getElementById('lobby-bot-score-value');
+        this.botScoreInput = document.getElementById('lobby-bot-score-input');
+        this.botTimeValue = document.getElementById('lobby-bot-time-value');
+        this.botTimeInput = document.getElementById('lobby-bot-time-input');
+
+        this.lobbyStatus = document.getElementById('lobby-status');
+        this.lobbyStartBtn = document.getElementById('lobby-start-btn');
         this.lobbyCancelBtn = document.getElementById('lobby-cancel-btn');
     }
 
@@ -127,9 +148,16 @@ export class UIManager extends EventTarget {
                     infiniteAmmo
                 }
             }));
-
-            this.setupLobbySettingsListeners();
         });
+
+        this.playVsBotBtn.addEventListener('click', () => {
+            const nickname = this.playerNicknameInput.value.trim() || 'Player 1';
+            this.dispatchEvent(new CustomEvent('playVsBot', {
+                detail: { nickname }
+            }));
+        });
+
+        this.setupLobbySettingsListeners();
 
         this.joinMatchBtn.addEventListener('click', () => {
             this.showJoinScreen();
@@ -174,6 +202,10 @@ export class UIManager extends EventTarget {
             this.dispatchEvent(new Event('cancelLobby'));
         });
 
+        this.lobbyStartBtn.addEventListener('click', () => {
+            this.dispatchEvent(new Event('startMatch'));
+        });
+
         // Settings
         this.sensitivitySlider.addEventListener('input', (e) => {
             const value = parseFloat(e.target.value);
@@ -212,78 +244,151 @@ export class UIManager extends EventTarget {
     }
 
     setupLobbySettingsListeners() {
-        const roundsInput = document.getElementById('lobby-rounds-input');
-        const autoRematchCheck = document.getElementById('lobby-auto-rematch');
-        const infiniteAmmoCheck = document.getElementById('lobby-infinite-ammo');
-        const speedInput = document.getElementById('lobby-speed-input');
-        const jumpInput = document.getElementById('lobby-jump-input');
+        // These elements are now class properties, no need to re-get them
+        // const roundsInput = document.getElementById('lobby-rounds-input');
+        // const autoRematchCheck = document.getElementById('lobby-auto-rematch');
+        // const infiniteAmmoCheck = document.getElementById('lobby-infinite-ammo');
+        // const speedInput = document.getElementById('lobby-speed-input');
+        // const jumpInput = document.getElementById('lobby-jump-input');
 
-        const speedValue = document.getElementById('lobby-speed-value');
-        const jumpValue = document.getElementById('lobby-jump-value');
+        // const speedValue = document.getElementById('lobby-speed-value');
+        // const jumpValue = document.getElementById('lobby-jump-value');
 
-        if (speedInput && speedValue) {
-            speedInput.addEventListener('input', (e) => {
-                speedValue.textContent = parseFloat(e.target.value).toFixed(1);
+        if (this.lobbySpeedInput && this.lobbySpeedValue) {
+            this.lobbySpeedInput.addEventListener('input', (e) => {
+                this.lobbySpeedValue.textContent = parseFloat(e.target.value).toFixed(1);
             });
         }
-        if (jumpInput && jumpValue) {
-            jumpInput.addEventListener('input', (e) => {
-                jumpValue.textContent = parseFloat(e.target.value).toFixed(1);
+        if (this.lobbyJumpInput && this.lobbyJumpValue) {
+            this.lobbyJumpInput.addEventListener('input', (e) => {
+                this.lobbyJumpValue.textContent = parseFloat(e.target.value).toFixed(1);
             });
         }
 
         const emitUpdate = () => {
-            this.dispatchEvent(new CustomEvent('lobbySettingsUpdated', {
-                detail: {
-                    rounds: roundsInput ? parseInt(roundsInput.value) : 999,
-                    autoRematch: autoRematchCheck ? autoRematchCheck.checked : true,
-                    infiniteAmmo: infiniteAmmoCheck ? infiniteAmmoCheck.checked : false,
-                    movementSpeed: speedInput ? parseFloat(speedInput.value) : 1.0,
-                    jumpLevel: jumpInput ? parseFloat(jumpInput.value) : 1.0
-                }
-            }));
+            const detail = {
+                movementSpeed: this.lobbySpeedInput ? parseFloat(this.lobbySpeedInput.value) : 1.0,
+                jumpLevel: this.lobbyJumpInput ? parseFloat(this.lobbyJumpInput.value) : 1.0,
+                botDifficulty: this.botDifficultyInput ? this.botDifficultyInput.value : 'MEDIO',
+                botCount: this.botCountInput ? parseInt(this.botCountInput.value) : 0,
+                botMode: this.botModeInput ? this.botModeInput.value : 'COOP_BOT',
+                roundTime: this.botTimeInput ? parseInt(this.botTimeInput.value) : 180
+            };
+
+            if (this.lobbyRoundsInput) detail.rounds = parseInt(this.lobbyRoundsInput.value);
+            else if (this.botScoreInput) detail.rounds = parseInt(this.botScoreInput.value); // Use score limit as rounds
+
+            if (this.lobbyAutoRematchCheck) detail.autoRematch = this.lobbyAutoRematchCheck.checked;
+            if (this.lobbyInfiniteAmmoCheck) detail.infiniteAmmo = this.lobbyInfiniteAmmoCheck.checked;
+
+            this.dispatchEvent(new CustomEvent('lobbySettingsUpdated', { detail }));
         };
 
-        if (roundsInput) roundsInput.addEventListener('change', emitUpdate);
-        if (autoRematchCheck) autoRematchCheck.addEventListener('change', emitUpdate);
-        if (infiniteAmmoCheck) infiniteAmmoCheck.addEventListener('change', emitUpdate);
-        if (speedInput) speedInput.addEventListener('change', emitUpdate);
-        if (jumpInput) jumpInput.addEventListener('change', emitUpdate);
+        if (this.lobbyRoundsInput) this.lobbyRoundsInput.addEventListener('change', emitUpdate);
+        if (this.lobbyAutoRematchCheck) this.lobbyAutoRematchCheck.addEventListener('change', emitUpdate);
+        if (this.lobbyInfiniteAmmoCheck) this.lobbyInfiniteAmmoCheck.addEventListener('change', emitUpdate);
+
+        if (this.lobbySpeedInput && this.lobbySpeedValue) {
+            this.lobbySpeedInput.addEventListener('input', () => {
+                this.lobbySpeedValue.textContent = this.lobbySpeedInput.value;
+                emitUpdate();
+            });
+        }
+
+        if (this.lobbyJumpInput && this.lobbyJumpValue) {
+            this.lobbyJumpInput.addEventListener('input', () => {
+                this.lobbyJumpValue.textContent = this.lobbyJumpInput.value;
+                emitUpdate();
+            });
+        }
+
+        if (this.botDifficultyInput) this.botDifficultyInput.addEventListener('change', emitUpdate);
+
+        if (this.botCountInput && this.botCountValue) {
+            this.botCountInput.addEventListener('input', () => {
+                this.botCountValue.textContent = this.botCountInput.value;
+                emitUpdate();
+            });
+        }
+
+        if (this.botModeInput) this.botModeInput.addEventListener('change', emitUpdate);
+
+        if (this.botScoreInput && this.botScoreValue) {
+            this.botScoreInput.addEventListener('input', () => {
+                this.botScoreValue.textContent = this.botScoreInput.value;
+                emitUpdate();
+            });
+        }
+
+        if (this.botTimeInput && this.botTimeValue) {
+            this.botTimeInput.addEventListener('input', () => {
+                this.botTimeValue.textContent = this.botTimeInput.value;
+                emitUpdate();
+            });
+        }
     }
 
     updateLobbySettings(settings) {
-        const roundsInput = document.getElementById('lobby-rounds-input');
-        const autoRematchCheck = document.getElementById('lobby-auto-rematch');
-        const infiniteAmmoCheck = document.getElementById('lobby-infinite-ammo');
-        const speedInput = document.getElementById('lobby-speed-input');
-        const jumpInput = document.getElementById('lobby-jump-input');
-        const speedValue = document.getElementById('lobby-speed-value');
-        const jumpValue = document.getElementById('lobby-jump-value');
+        // These elements are now class properties, no need to re-get them
+        // const roundsInput = document.getElementById('lobby-rounds-input');
+        // const autoRematchCheck = document.getElementById('lobby-auto-rematch');
+        // const infiniteAmmoCheck = document.getElementById('lobby-infinite-ammo');
+        // const speedInput = document.getElementById('lobby-speed-input');
+        // const jumpInput = document.getElementById('lobby-jump-input');
+        // const speedValue = document.getElementById('lobby-speed-value');
+        // const jumpValue = document.getElementById('lobby-jump-value');
 
-        if (roundsInput && settings.rounds !== undefined) roundsInput.value = settings.rounds;
-        if (autoRematchCheck && settings.autoRematch !== undefined) autoRematchCheck.checked = settings.autoRematch;
-        if (infiniteAmmoCheck && settings.infiniteAmmo !== undefined) infiniteAmmoCheck.checked = settings.infiniteAmmo;
-        if (speedInput && settings.movementSpeed !== undefined) {
-            speedInput.value = settings.movementSpeed;
-            if (speedValue) speedValue.textContent = parseFloat(settings.movementSpeed).toFixed(1);
+        if (this.lobbyRoundsInput && settings.rounds !== undefined) this.lobbyRoundsInput.value = settings.rounds;
+        if (this.lobbyAutoRematchCheck && settings.autoRematch !== undefined) this.lobbyAutoRematchCheck.checked = settings.autoRematch;
+        if (this.lobbyInfiniteAmmoCheck && settings.infiniteAmmo !== undefined) this.lobbyInfiniteAmmoCheck.checked = settings.infiniteAmmo;
+        if (settings.movementSpeed !== undefined) {
+            this.lobbySpeedInput.value = settings.movementSpeed;
+            this.lobbySpeedValue.textContent = settings.movementSpeed;
         }
-        if (jumpInput && settings.jumpLevel !== undefined) {
-            jumpInput.value = settings.jumpLevel;
-            if (jumpValue) jumpValue.textContent = parseFloat(settings.jumpLevel).toFixed(1);
+        if (settings.jumpLevel !== undefined) {
+            this.lobbyJumpInput.value = settings.jumpLevel;
+            this.lobbyJumpValue.textContent = settings.jumpLevel;
+        }
+
+        if (settings.matchMode === 'COOP_BOT' || settings.matchMode === 'DEATHMATCH_BOT') {
+            const isHost = this.lobbyStartBtn && !this.lobbyStartBtn.classList.contains('hidden');
+            if (isHost) {
+                this.botSettingsSection.classList.remove('hidden');
+            } else {
+                this.botSettingsSection.classList.add('hidden');
+            }
+        } else {
+            this.botSettingsSection.classList.add('hidden');
+        }
+
+        if (settings.botDifficulty !== undefined) this.botDifficultyInput.value = settings.botDifficulty;
+        if (settings.botCount !== undefined) {
+            this.botCountInput.value = settings.botCount;
+            this.botCountValue.textContent = settings.botCount;
+        }
+        if (settings.botMode !== undefined) this.botModeInput.value = settings.botMode;
+        if (settings.rounds !== undefined) {
+            this.botScoreInput.value = settings.rounds;
+            this.botScoreValue.textContent = settings.rounds;
+        }
+        if (settings.roundTime !== undefined) {
+            this.botTimeInput.value = settings.roundTime;
+            this.botTimeValue.textContent = settings.roundTime;
         }
     }
 
     disableLobbySettings() {
-        const r = document.getElementById('lobby-rounds-input');
-        const a = document.getElementById('lobby-auto-rematch');
-        const i = document.getElementById('lobby-infinite-ammo');
-        const s = document.getElementById('lobby-speed-input');
-        const j = document.getElementById('lobby-jump-input');
-        if (r) r.disabled = true;
-        if (a) a.disabled = true;
-        if (i) i.disabled = true;
-        if (s) s.disabled = true;
-        if (j) j.disabled = true;
+        if (this.lobbyRoundsInput) this.lobbyRoundsInput.disabled = true;
+        if (this.lobbyAutoRematchCheck) this.lobbyAutoRematchCheck.disabled = true;
+        if (this.lobbyInfiniteAmmoCheck) this.lobbyInfiniteAmmoCheck.disabled = true;
+        if (this.lobbySpeedInput) this.lobbySpeedInput.disabled = true;
+        if (this.lobbyJumpInput) this.lobbyJumpInput.disabled = true;
+
+        if (this.botDifficultyInput) this.botDifficultyInput.disabled = true;
+        if (this.botCountInput) this.botCountInput.disabled = true;
+        if (this.botModeInput) this.botModeInput.disabled = true;
+        if (this.botScoreInput) this.botScoreInput.disabled = true;
+        if (this.botTimeInput) this.botTimeInput.disabled = true;
     }
 
     loadSettings() {
@@ -318,11 +423,23 @@ export class UIManager extends EventTarget {
         this.inviteCodeInput.focus();
     }
 
-    showLobby(code) {
+    showLobby(code, isHost = false, isBotMatch = false) {
         this.hideAllScreens();
         this.lobbyScreen.classList.add('active');
         this.lobbyCode.textContent = code;
-        this.lobbyStatus.textContent = 'Waiting for opponent...';
+        this.lobbyStatus.textContent = isBotMatch ? 'Configure and START MATCH' : 'Waiting for opponent...';
+
+        if (isHost) {
+            this.lobbyStartBtn.classList.remove('hidden');
+            if (isBotMatch) {
+                this.botSettingsSection.classList.remove('hidden');
+            } else {
+                this.botSettingsSection.classList.add('hidden');
+            }
+        } else {
+            this.lobbyStartBtn.classList.add('hidden');
+            this.botSettingsSection.classList.add('hidden'); // Guests NEVER see bot controls
+        }
     }
 
     showSettings() {

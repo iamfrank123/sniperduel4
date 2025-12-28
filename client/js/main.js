@@ -17,10 +17,12 @@ class App {
     init() {
         // Initialize UI event listeners
         this.ui.addEventListener('createMatch', (e) => this.handleCreateMatch(e.detail));
+        this.ui.addEventListener('playVsBot', (e) => this.handlePlayVsBot(e.detail));
         this.ui.addEventListener('joinMatch', (e) => this.handleJoinMatch(e.detail));
         this.ui.addEventListener('cancelLobby', () => this.handleCancelLobby());
         this.ui.addEventListener('returnToMenu', () => this.handleReturnToMenu());
         this.ui.addEventListener('lobbySettingsUpdated', (e) => this.handleUpdateSettings(e.detail));
+        this.ui.addEventListener('startMatch', () => this.handleStartMatch());
 
         // Network event listeners
         this.network.addEventListener('matchCreated', (e) => this.onMatchCreated(e.detail));
@@ -45,6 +47,17 @@ class App {
         }
     }
 
+    async handlePlayVsBot(settings) {
+        this.ui.showLoading();
+        try {
+            await this.network.createBotMatch(settings);
+        } catch (error) {
+            console.error('Failed to create bot match:', error);
+            this.ui.showError('Failed to create bot match. Please try again.');
+            this.ui.hideLoading();
+        }
+    }
+
     async handleJoinMatch(data) {
         this.ui.showLoading();
         try {
@@ -63,6 +76,10 @@ class App {
 
     handleUpdateSettings(settings) {
         this.network.sendUpdateSettings(settings);
+    }
+
+    handleStartMatch() {
+        this.network.sendStartGame();
     }
 
     handleReturnToMenu() {
@@ -85,15 +102,18 @@ class App {
 
     onMatchCreated(data) {
         this.ui.hideLoading();
-        this.ui.showLobby(data.inviteCode);
+        const isBotMatch = data.settings && (data.settings.matchMode === 'COOP_BOT' || data.settings.matchMode === 'DEATHMATCH_BOT');
+        this.ui.showLobby(data.inviteCode, true, isBotMatch);
         if (data.settings) {
+            this.ui.updateLobbySettings(data.settings);
             this.lastSettings = data.settings;
         }
     }
 
     onMatchJoined(data) {
         this.ui.hideLoading();
-        this.ui.showLobby(data.inviteCode);
+        const isBotMatch = data.settings && (data.settings.matchMode === 'COOP_BOT' || data.settings.matchMode === 'DEATHMATCH_BOT');
+        this.ui.showLobby(data.inviteCode, false, isBotMatch);
         this.ui.disableLobbySettings();
         if (data.settings) {
             this.ui.updateLobbySettings(data.settings);

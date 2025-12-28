@@ -61,6 +61,7 @@ io.on('connection', (socket) => {
     socket.on('playerShoot', (data) => matchManager.handlePlayerShoot(socket, data));
     socket.on('playerReload', (data) => matchManager.handlePlayerReload(socket, data));
     socket.on('updateSettings', (data) => matchManager.handleUpdateSettings(socket, data));
+    socket.on('startGame', () => matchManager.handleStartGame(socket));
     socket.on('scopeToggle', (data) => {
         matchManager.handleScopeToggle(socket, data);
     });

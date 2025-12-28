@@ -41,7 +41,10 @@ export class MatchManager {
                 autoRematch: gameState.autoRematch,
                 infiniteAmmo: gameState.infiniteAmmo,
                 movementSpeed: gameState.movementSpeed,
-                jumpLevel: gameState.jumpLevel
+                jumpLevel: gameState.jumpLevel,
+                matchMode: gameState.matchMode,
+                botDifficulty: gameState.botDifficulty,
+                botCount: gameState.botCount
             }
         };
     }
@@ -86,8 +89,9 @@ export class MatchManager {
             nickname
         });
 
-        // Start game if it's the 2nd player and match is waiting
-        if (targetMatch.status === 'WAITING' && targetMatch.players.size >= 2) {
+        // Start game if it's the 2nd player and match is waiting, OR if it's VS BOT mode
+        const minPlayers = targetMatch.matchMode === 'PVP' ? 2 : 1;
+        if (targetMatch.status === 'WAITING' && targetMatch.players.size >= minPlayers) {
             setTimeout(() => {
                 targetMatch.startGame();
             }, 2000);
@@ -112,7 +116,10 @@ export class MatchManager {
                 autoRematch: targetMatch.autoRematch,
                 infiniteAmmo: targetMatch.infiniteAmmo,
                 movementSpeed: targetMatch.movementSpeed,
-                jumpLevel: targetMatch.jumpLevel
+                jumpLevel: targetMatch.jumpLevel,
+                matchMode: targetMatch.matchMode,
+                botDifficulty: targetMatch.botDifficulty,
+                botCount: targetMatch.botCount
             }
         };
     }
@@ -172,6 +179,16 @@ export class MatchManager {
         const gameState = this.matches.get(matchId);
         if (gameState) {
             gameState.updateSettings(settings);
+        }
+    }
+
+    handleStartGame(socket) {
+        const matchId = this.socketToMatch.get(socket.id);
+        if (!matchId) return;
+
+        const gameState = this.matches.get(matchId);
+        if (gameState && gameState.status === 'WAITING') {
+            gameState.startGame();
         }
     }
 

@@ -19,6 +19,7 @@ export class Game {
 
         this.running = false;
         this.lastTime = 0;
+        this.opponentsData = new Map(); // Store history for interpolation
 
         this.gameState = {
             round: 1,
@@ -80,6 +81,8 @@ export class Game {
         if (this.player) {
             this.player.update(deltaTime);
         }
+
+        this.interpolateOpponents();
     }
 
     onStateUpdate(data) {
@@ -109,6 +112,7 @@ export class Game {
                 if (!currentOpponentIds.has(id)) {
                     this.scene.scene.remove(model);
                     this.opponents.delete(id);
+                    this.opponentsData.delete(id);
                 }
             }
 
@@ -120,30 +124,84 @@ export class Game {
     }
 
     updateOpponent(id, opponentData) {
-        let opponent = this.opponents.get(id);
-        if (!opponent) {
-            opponent = this.createOpponentMesh();
-            this.opponents.set(id, opponent);
+        let opponentModel = this.opponents.get(id);
+        if (!opponentModel) {
+            opponentModel = this.createOpponentMesh();
+            this.opponents.set(id, opponentModel);
         }
 
-        if (opponentData.nickname && opponent.setName && !opponent.hasName) {
-            opponent.setName(opponentData.nickname);
-            opponent.hasName = true;
+        // Initialize or update interpolation buffer
+        if (!this.opponentsData.has(id)) {
+            this.opponentsData.set(id, {
+                buffer: [],
+                visible: true
+            });
         }
 
-        if (opponentData.position) {
-            opponent.position.set(
-                opponentData.position.x,
-                opponentData.position.y,
-                opponentData.position.z
-            );
+        const data = this.opponentsData.get(id);
+
+        // Add new snapshot to buffer
+        data.buffer.push({
+            timestamp: Date.now(),
+            position: { ...opponentData.position },
+            rotation: { ...opponentData.rotation },
+            isDead: opponentData.isDead
+        });
+
+        // Keep buffer small
+        if (data.buffer.length > 10) data.buffer.shift();
+
+        if (opponentData.nickname && opponentModel.setName && !opponentModel.hasName) {
+            opponentModel.setName(opponentData.nickname);
+            opponentModel.hasName = true;
         }
 
-        if (opponentData.rotation) {
-            opponent.rotation.y = opponentData.rotation.yaw || 0;
-        }
+        opponentModel.visible = !opponentData.isDead;
+    }
 
-        opponent.visible = !opponentData.isDead;
+    interpolateOpponents() {
+        const renderTime = Date.now() - GAME_CONSTANTS.INTERPOLATION_DELAY;
+
+        for (const [id, model] of this.opponents) {
+            const data = this.opponentsData.get(id);
+            if (!data || data.buffer.length < 2) continue;
+
+            const buffer = data.buffer;
+
+            // Find two snapshots to interpolate between
+            let i = 0;
+            while (i < buffer.length - 2 && buffer[i + 1].timestamp < renderTime) {
+                i++;
+            }
+
+            const s0 = buffer[i];
+            const s1 = buffer[i + 1];
+
+            if (renderTime >= s0.timestamp && renderTime <= s1.timestamp) {
+                const fraction = (renderTime - s0.timestamp) / (s1.timestamp - s0.timestamp);
+
+                // Interpolate position
+                model.position.lerpVectors(
+                    new THREE.Vector3(s0.position.x, s0.position.y, s0.position.z),
+                    new THREE.Vector3(s1.position.x, s1.position.y, s1.position.z),
+                    fraction
+                );
+
+                // Interpolate rotation (yaw)
+                // Use shortest path for rotation
+                let startYaw = s0.rotation.yaw || 0;
+                let endYaw = s1.rotation.yaw || 0;
+                let diff = endYaw - startYaw;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+
+                model.rotation.y = startYaw + diff * fraction;
+            } else if (renderTime > s1.timestamp) {
+                // Extrapolate or just set to latest (simplified)
+                model.position.set(s1.position.x, s1.position.y, s1.position.z);
+                model.rotation.y = s1.rotation.yaw || 0;
+            }
+        }
     }
 
     createOpponentMesh() {
@@ -160,7 +218,12 @@ export class Game {
 
         if (data.fatal) {
             if (data.hitbox === 'HEAD') {
-                this.audioManager.playHeadshotKill();
+                // Only play headshot announcement if it's a human player
+                if (!data.isShooterBot) {
+                    this.audioManager.playHeadshotKill();
+                } else {
+                    this.audioManager.playKilled();
+                }
             } else {
                 this.audioManager.playKilled();
             }
