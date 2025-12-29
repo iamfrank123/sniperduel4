@@ -30,6 +30,9 @@ export class BotAI {
 
         // Jumping logic
         this.nextJumpTime = Date.now() + 5000 + Math.random() * 5000;
+
+        // LINE OF SIGHT CACHE: Store LOS results for 500ms to optimize performance
+        this.losCache = new Map(); // playerId -> { hasLOS: boolean, timestamp: number }
     }
 
     getReactionTime() {
@@ -105,17 +108,68 @@ export class BotAI {
     handleJumping() {
         const now = Date.now();
         if (now > this.nextJumpTime && this.isGrounded) {
-            this.velocityY = GAME_CONSTANTS.JUMP_VELOCITY;
+            // BOT JUMP: Use player's jump level setting for consistency
+            const jumpLevel = this.gameState.players.values().next().value?.settings?.jumpLevel || 1.0;
+            this.velocityY = GAME_CONSTANTS.JUMP_VELOCITY * jumpLevel;
             this.isGrounded = false;
 
-            // Schedule next jump (5-10 seconds)
-            this.nextJumpTime = now + 5000 + Math.random() * 5000;
+            // Schedule next jump (3-8 seconds for more frequent jumping)
+            this.nextJumpTime = now + 3000 + Math.random() * 5000;
         }
+    }
+
+    // LINE OF SIGHT: Raycast to check if bot can see target through obstacles
+    checkLineOfSight(targetPos) {
+        const botEyePos = {
+            x: this.bot.position.x,
+            y: this.bot.position.y + 1.6, // Eye height
+            z: this.bot.position.z
+        };
+
+        const targetEyePos = {
+            x: targetPos.x,
+            y: targetPos.y + 1.6,
+            z: targetPos.z
+        };
+
+        // Calculate direction and distance
+        const dx = targetEyePos.x - botEyePos.x;
+        const dy = targetEyePos.y - botEyePos.y;
+        const dz = targetEyePos.z - botEyePos.z;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (distance < 0.1) return true; // Too close, consider visible
+
+        // Normalize direction
+        const dirX = dx / distance;
+        const dirY = dy / distance;
+        const dirZ = dz / distance;
+
+        // Sample points along the ray every 0.5 meters
+        const stepSize = 0.5;
+        const numSteps = Math.floor(distance / stepSize);
+
+        for (let i = 1; i < numSteps; i++) {
+            const t = i * stepSize;
+            const checkPos = {
+                x: botEyePos.x + dirX * t,
+                y: botEyePos.y + dirY * t,
+                z: botEyePos.z + dirZ * t
+            };
+
+            // Check if this point collides with map geometry
+            if (checkMapCollision(checkPos, 0.1)) {
+                return false; // Obstacle in the way
+            }
+        }
+
+        return true; // Clear line of sight
     }
 
     findTarget() {
         let closestTarget = null;
         let minDistance = Infinity;
+        const now = Date.now();
 
         for (const [id, player] of this.gameState.players) {
             if (id === this.bot.id || player.isDead) continue;
@@ -128,8 +182,18 @@ export class BotAI {
 
             const dist = this.getDistance(this.bot.position, player.position);
 
-            // Simple Line of Sight check (raycast would be better but expensive)
-            const hasLOS = true; // Placeholder for LOS check
+            // LINE OF SIGHT CHECK with caching
+            let hasLOS = false;
+            const cached = this.losCache.get(id);
+
+            if (cached && (now - cached.timestamp) < 500) {
+                // Use cached result if less than 500ms old
+                hasLOS = cached.hasLOS;
+            } else {
+                // Perform new LOS check and cache it
+                hasLOS = this.checkLineOfSight(player.position);
+                this.losCache.set(id, { hasLOS, timestamp: now });
+            }
 
             if (dist < minDistance && hasLOS) {
                 minDistance = dist;
@@ -203,7 +267,11 @@ export class BotAI {
         if (!this.target || this.bot.ammo <= 0) return;
 
         const now = Date.now();
-        const fireRate = 2000; // Bolt action delay
+
+        // TIMING VARIABILITY: Add ±250ms jitter to fire rate
+        const baseFireRate = 2000; // Bolt action delay
+        const jitter = (Math.random() - 0.5) * 500; // ±250ms
+        const fireRate = baseFireRate + jitter;
 
         const targetAimPos = this.lookAtPos || {
             x: this.target.position.x,
@@ -212,6 +280,11 @@ export class BotAI {
         };
 
         if (now - this.lastShotTime > fireRate + this.reactionTime) {
+            // Verify LOS before shooting
+            if (!this.checkLineOfSight(this.target.position)) {
+                return; // Don't shoot through walls
+            }
+
             // Check accuracy
             const roll = Math.random();
             const shooterPos = { ...this.bot.position, y: this.bot.position.y + 1.6 };
@@ -226,9 +299,18 @@ export class BotAI {
                     accuracy: 1.0
                 });
             } else {
-                // Shoot slightly off
-                dir.x += (Math.random() - 0.5) * 0.2;
-                dir.y += (Math.random() - 0.5) * 0.2;
+                // ACCURACY-BASED SPREAD: Miss with variable spread based on difficulty
+                const spreadAmount = (1.0 - this.accuracy) * 0.3; // More spread for lower accuracy
+                dir.x += (Math.random() - 0.5) * spreadAmount;
+                dir.y += (Math.random() - 0.5) * spreadAmount;
+                dir.z += (Math.random() - 0.5) * spreadAmount;
+
+                // Normalize direction after adding spread
+                const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+                dir.x /= mag;
+                dir.y /= mag;
+                dir.z /= mag;
+
                 this.gameState.handlePlayerShoot(this.bot.id, {
                     position: shooterPos,
                     direction: dir,

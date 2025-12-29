@@ -32,7 +32,8 @@ export class GameState {
         this.timeRemaining = GAME_CONSTANTS.ROUND_TIME;
 
         this.hitDetection = new HitDetection();
-        this.stateHistory = []; // For lag compensation
+        this.stateHistory = []; // For lag compensation (max 20 snapshots, 500ms)
+        this.previousState = {}; // For delta compression
 
         this.tickInterval = null;
     }
@@ -176,9 +177,14 @@ export class GameState {
 
         this.stateHistory.push(snapshot);
 
-        // Keep only last 500ms of history
+        // MEMORY LEAK FIX: Dual protection - time-based AND count-based
         const cutoff = Date.now() - 500;
         this.stateHistory = this.stateHistory.filter(s => s.timestamp >= cutoff);
+
+        // Hard limit: never exceed 20 snapshots
+        if (this.stateHistory.length > 20) {
+            this.stateHistory = this.stateHistory.slice(-20);
+        }
     }
 
     broadcastState() {
@@ -190,15 +196,67 @@ export class GameState {
             players: {}
         };
 
+        // NETWORK OPTIMIZATION: Delta compression - only send changed values
+        const POSITION_TOLERANCE = 0.01;
+        const ROTATION_TOLERANCE = 0.01;
+
         for (const [playerId, player] of this.players) {
-            stateUpdate.players[playerId] = {
-                position: player.position,
-                rotation: player.rotation,
+            const prev = this.previousState[playerId];
+            const playerUpdate = {};
+
+            // Always send nickname and isBot on first update
+            if (!prev) {
+                playerUpdate.nickname = player.nickname;
+                playerUpdate.isBot = player.isBot || false;
+                playerUpdate.position = player.position;
+                playerUpdate.rotation = player.rotation;
+                playerUpdate.health = player.health;
+                playerUpdate.isDead = player.isDead;
+            } else {
+                // Only send position if changed significantly
+                if (Math.abs(player.position.x - prev.position.x) > POSITION_TOLERANCE ||
+                    Math.abs(player.position.y - prev.position.y) > POSITION_TOLERANCE ||
+                    Math.abs(player.position.z - prev.position.z) > POSITION_TOLERANCE) {
+                    playerUpdate.position = player.position;
+                }
+
+                // Only send rotation if changed significantly
+                if (Math.abs(player.rotation.yaw - prev.rotation.yaw) > ROTATION_TOLERANCE ||
+                    Math.abs(player.rotation.pitch - prev.rotation.pitch) > ROTATION_TOLERANCE) {
+                    playerUpdate.rotation = player.rotation;
+                }
+
+                // Only send health if changed
+                if (player.health !== prev.health) {
+                    playerUpdate.health = player.health;
+                }
+
+                // Only send isDead if changed
+                if (player.isDead !== prev.isDead) {
+                    playerUpdate.isDead = player.isDead;
+                }
+
+                // Always include nickname and isBot for new clients
+                playerUpdate.nickname = player.nickname;
+                playerUpdate.isBot = player.isBot || false;
+            }
+
+            stateUpdate.players[playerId] = playerUpdate;
+
+            // Update previous state
+            this.previousState[playerId] = {
+                position: { ...player.position },
+                rotation: { ...player.rotation },
                 health: player.health,
-                isDead: player.isDead,
-                nickname: player.nickname,
-                isBot: player.isBot || false
+                isDead: player.isDead
             };
+        }
+
+        // Clean up previous state for disconnected players
+        for (const playerId in this.previousState) {
+            if (!this.players.has(playerId)) {
+                delete this.previousState[playerId];
+            }
         }
 
         this.io.to(this.matchId).emit('stateUpdate', stateUpdate);
@@ -208,12 +266,36 @@ export class GameState {
         const player = this.players.get(playerId);
         if (!player || player.isDead) return;
 
-        // Server-side collision validation
-        // Only ignore if the NEW position is clearly inside an object
-        if (checkMapCollision(data.position, GAME_CONSTANTS.PLAYER_RADIUS * 0.9)) { // Slightly more lenient buffer
+        // COLLISION RESOLUTION: Implement sliding instead of rejection
+        const newPos = data.position;
+        const oldPos = player.position;
+
+        // Check if new position collides
+        if (checkMapCollision(newPos, GAME_CONSTANTS.PLAYER_RADIUS * 0.9)) {
+            // Try sliding along X axis
+            const slideX = { x: newPos.x, y: newPos.y, z: oldPos.z };
+            if (!checkMapCollision(slideX, GAME_CONSTANTS.PLAYER_RADIUS * 0.9)) {
+                player.position = slideX;
+                player.rotation = data.rotation;
+                player.velocity = data.velocity;
+                return;
+            }
+
+            // Try sliding along Z axis
+            const slideZ = { x: oldPos.x, y: newPos.y, z: newPos.z };
+            if (!checkMapCollision(slideZ, GAME_CONSTANTS.PLAYER_RADIUS * 0.9)) {
+                player.position = slideZ;
+                player.rotation = data.rotation;
+                player.velocity = data.velocity;
+                return;
+            }
+
+            // If both slides fail, keep old position but update rotation
+            player.rotation = data.rotation;
             return;
         }
 
+        // No collision, accept the movement
         player.position = data.position;
         player.rotation = data.rotation;
         player.velocity = data.velocity;
@@ -362,7 +444,12 @@ export class GameState {
         if (settings.matchMode !== undefined) this.matchMode = settings.matchMode;
         if (settings.botDifficulty !== undefined) this.botDifficulty = settings.botDifficulty;
         if (settings.botCount !== undefined) this.botCount = settings.botCount;
-        if (settings.botMode !== undefined) this.matchMode = settings.botMode;
+
+        // BUG FIX: Only update matchMode from botMode if we are NOT in PVP mode
+        // This prevents "Create Match" (PVP) from being hijacked by default bot settings
+        if (settings.botMode !== undefined && this.matchMode !== 'PVP') {
+            this.matchMode = settings.botMode;
+        }
         if (settings.roundTime !== undefined) this.roundTime = settings.roundTime;
 
         // Broadcast update to all players

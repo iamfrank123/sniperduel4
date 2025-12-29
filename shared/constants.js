@@ -16,7 +16,7 @@ export const GAME_CONSTANTS = {
     BODY_DAMAGE: 75,
     LIMB_DAMAGE: 50,
     BOLT_ACTION_TIME: 1.5,
-    RELOAD_TIME: 2.5,
+    RELOAD_TIME: 1.5,
     MAGAZINE_SIZE: 5,
     RESERVE_AMMO: 20,
 
@@ -29,8 +29,8 @@ export const GAME_CONSTANTS = {
     MAX_SPREAD_ANGLE: 5.0,
 
     // Camera
-    DEFAULT_FOV: 75,
-    SCOPED_FOV: 45,
+    DEFAULT_FOV: 65,
+    SCOPED_FOV: 40,
     FOV_TRANSITION_SPEED: 60,
     PITCH_MIN: -89,
     PITCH_MAX: 89,
@@ -47,7 +47,7 @@ export const GAME_CONSTANTS = {
     MAX_HEALTH: 100,
     ROUNDS_TO_WIN: 999,
     ROUND_TIME: 180,
-    RESPAWN_TIME: 0.5,
+    RESPAWN_TIME: 2.0,  // 2 seconds delay before respawn
 
     // Map
     MAP_SIZE: 100,
