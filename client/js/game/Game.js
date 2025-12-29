@@ -306,6 +306,19 @@ export class Game {
     onPlayerDied(data) {
         if (data.victimId === this.network.playerId) {
             this.player.die();
+        } else {
+            // IMMEDIATE HIDDEN FIX: Hide opponent immediately when death event arrives
+            // Don't wait for next state tick to avoid any delay
+            const opponent = this.opponents.get(data.victimId);
+            if (opponent) {
+                opponent.visible = false;
+
+                // Also clear interpolation buffer to be safe
+                const oppData = this.opponentsData.get(data.victimId);
+                if (oppData) {
+                    oppData.buffer = [];
+                }
+            }
         }
     }
 
