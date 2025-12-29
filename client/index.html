@@ -148,6 +148,11 @@
     <!-- Kill Feed -->
     <div id="kill-feed" class="kill-feed"></div>
 
+    <!-- Control Hints -->
+    <div class="control-hints">
+      <div class="hint-item">ESC / TAB - Menu</div>
+    </div>
+
     <!-- Bottom Left - Player Stats -->
     <div class="hud-bottom-left">
       <div class="health-bar">
@@ -168,6 +173,56 @@
 
     <!-- Damage Indicator -->
     <div id="damage-indicator" class="damage-indicator hidden"></div>
+
+    <!-- Pause Menu -->
+    <div id="pause-menu" class="pause-menu hidden">
+      <div class="pause-overlay"></div>
+      <div class="pause-content">
+        <div class="pause-header">
+          <h1>MENU</h1>
+          <button id="pause-close-btn" class="pause-close">✕</button>
+        </div>
+
+        <div class="pause-section">
+          <h3>Impostazioni Video</h3>
+          <div class="setting-item">
+            <label>Campo Visivo (FOV): <span id="pause-fov-value">65</span>°</label>
+            <input type="range" id="pause-fov" min="50" max="110" step="5" value="65">
+          </div>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="pause-fullscreen" checked disabled>
+              Schermo Intero (Forzato)
+            </label>
+          </div>
+        </div>
+
+        <div class="pause-section">
+          <h3>Controlli</h3>
+          <div class="setting-item">
+            <label>Sensibilità Mouse: <span id="pause-sensitivity-value">1.0</span></label>
+            <input type="range" id="pause-sensitivity" min="0.1" max="3.0" step="0.1" value="1.0">
+          </div>
+        </div>
+
+        <div class="pause-section">
+          <h3>Audio</h3>
+          <div class="setting-item">
+            <label>Volume Generale: <span id="pause-volume-value">100</span>%</label>
+            <input type="range" id="pause-volume" min="0" max="100" step="5" value="100">
+          </div>
+        </div>
+
+        <div class="pause-actions">
+          <button id="pause-resume-btn" class="btn btn-primary pause-btn-large">↩ RIPRENDI PARTITA</button>
+          <button id="pause-exit-btn" class="btn btn-danger pause-btn-secondary">🚪 ESCI DALLA PARTITA</button>
+        </div>
+
+        <div class="pause-footer">
+          <p>Premi ESC per chiudere il menu</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Round End Screen -->

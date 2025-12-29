@@ -5,6 +5,7 @@ import { Player } from './Player.js';
 import { InputManager } from '../utils/InputManager.js';
 import { GAME_CONSTANTS } from '../../../shared/constants.js';
 import { SniperModel } from './SniperModel.js';
+import { PauseMenu } from '../ui/PauseMenu.js';
 
 export class Game {
     constructor(network, ui, audioManager) {
@@ -38,6 +39,16 @@ export class Game {
         // Initialize player
         this.player = new Player(this.scene.scene, this.scene.camera, this.input, this.network, this.ui, this.audioManager);
 
+        // Initialize pause menu
+        this.pauseMenu = new PauseMenu(this);
+
+        // Connect ESC key to pause menu
+        this.input.onEscapePressed(() => {
+            if (this.running) {
+                this.pauseMenu.toggle();
+            }
+        });
+
         // Network event listeners
         this.network.addEventListener('stateUpdate', (e) => this.onStateUpdate(e.detail));
         this.network.addEventListener('hitConfirmed', (e) => this.onHitConfirmed(e.detail));
@@ -61,6 +72,12 @@ export class Game {
     start() {
         this.running = true;
         this.lastTime = performance.now();
+
+        // Enable fullscreen enforcement when game starts
+        if (this.pauseMenu) {
+            this.pauseMenu.enableFullscreenEnforcement();
+        }
+
         this.gameLoop();
     }
 
@@ -134,18 +151,41 @@ export class Game {
         if (!this.opponentsData.has(id)) {
             this.opponentsData.set(id, {
                 buffer: [],
-                visible: true
+                visible: true,
+                lastState: { // Store last known full state
+                    position: { x: 0, y: 0, z: 0 },
+                    rotation: { yaw: 0, pitch: 0 }
+                }
             });
         }
 
         const data = this.opponentsData.get(id);
 
-        // Add new snapshot to buffer
+        // Update last known state with any new data present in opponentData
+        if (opponentData.position) data.lastState.position = { ...opponentData.position };
+        if (opponentData.rotation) data.lastState.rotation = { ...opponentData.rotation };
+        // Use last known state if data is missing in this delta update
+        const currentPos = opponentData.position || data.lastState.position;
+        const currentRot = opponentData.rotation || data.lastState.rotation;
+
+        // RESPAWN FIX: Hide dead players immediately and clear buffer
+        // Note: Check explicitly if isDead is present, otherwise assume false (alive)
+        const isDead = opponentData.isDead === true;
+
+        if (isDead) {
+            opponentModel.visible = false;
+            data.buffer = []; // Clear interpolation buffer to prevent teleport animation
+            return;
+        } else {
+            opponentModel.visible = true;
+        }
+
+        // Add new snapshot to buffer (only for alive players)
         data.buffer.push({
             timestamp: Date.now(),
-            position: { ...opponentData.position },
-            rotation: { ...opponentData.rotation },
-            isDead: opponentData.isDead
+            position: { ...currentPos },
+            rotation: { ...currentRot },
+            isDead: isDead
         });
 
         // Keep buffer small
@@ -155,8 +195,6 @@ export class Game {
             opponentModel.setName(opponentData.nickname);
             opponentModel.hasName = true;
         }
-
-        opponentModel.visible = !opponentData.isDead;
     }
 
     interpolateOpponents() {
@@ -178,6 +216,21 @@ export class Game {
             const s1 = buffer[i + 1];
 
             if (renderTime >= s0.timestamp && renderTime <= s1.timestamp) {
+                // GLITCH FIX: Check if position change is too large (teleport detection)
+                const dx = s1.position.x - s0.position.x;
+                const dy = s1.position.y - s0.position.y;
+                const dz = s1.position.z - s0.position.z;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                // If movement is more than 10 units, it's likely a teleport - snap directly
+                const TELEPORT_THRESHOLD = 10;
+                if (distance > TELEPORT_THRESHOLD) {
+                    // Snap to new position instead of interpolating
+                    model.position.set(s1.position.x, s1.position.y, s1.position.z);
+                    model.rotation.y = s1.rotation.yaw || 0;
+                    continue;
+                }
+
                 const fraction = (renderTime - s0.timestamp) / (s1.timestamp - s0.timestamp);
 
                 // Interpolate position

@@ -32,6 +32,9 @@ export class Player {
 
         this.lastNetworkUpdate = 0;
         this.networkUpdateInterval = 1000 / 30; // 30Hz
+
+        // Mouse sensitivity (can be modified by pause menu)
+        this.mouseSensitivity = 1.0;
     }
 
     update(deltaTime) {
@@ -52,7 +55,7 @@ export class Player {
 
     updateRotation(deltaTime) {
         const mouseDelta = this.input.getMouseDelta();
-        const sensitivity = GAME_CONSTANTS.DEFAULT_SENSITIVITY * (localStorage.getItem('sensitivity') || 1.0);
+        const sensitivity = GAME_CONSTANTS.DEFAULT_SENSITIVITY * this.mouseSensitivity;
 
         this.rotation.yaw -= mouseDelta.x * sensitivity;
         this.rotation.pitch -= mouseDelta.y * sensitivity;

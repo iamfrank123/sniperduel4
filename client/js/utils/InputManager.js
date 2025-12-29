@@ -14,6 +14,9 @@ export class InputManager {
         this.locked = false;
         this.canvas = null;
 
+        // ESC key callback for pause menu
+        this.onEscapeCallback = null;
+
         this.initEventListeners();
     }
 
@@ -21,6 +24,13 @@ export class InputManager {
         // Keyboard
         window.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
+
+            // ESC or TAB key for pause menu (both work)
+            if ((e.code === 'Escape' || e.code === 'Tab') && this.onEscapeCallback) {
+                this.onEscapeCallback();
+                e.preventDefault();
+                return;
+            }
 
             // Prevent default for game keys
             if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'KeyR'].includes(e.code)) {
@@ -65,6 +75,10 @@ export class InputManager {
         document.addEventListener('pointerlockchange', () => {
             this.locked = document.pointerLockElement !== null;
         });
+    }
+
+    onEscapePressed(callback) {
+        this.onEscapeCallback = callback;
     }
 
     requestPointerLock(canvas) {
