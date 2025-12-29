@@ -152,18 +152,29 @@ export class Game {
             this.opponentsData.set(id, {
                 buffer: [],
                 visible: true,
+                localDeathUntil: 0, // Initialize death timer
                 lastState: { // Store last known full state
                     position: { x: 0, y: 0, z: 0 },
-                    rotation: { yaw: 0, pitch: 0 }
+                    rotation: { yaw: 0, pitch: 0 },
+                    isDead: false
                 }
             });
         }
 
         const data = this.opponentsData.get(id);
 
+        // ✅ FIX: Check if player is in forced death period - IGNORE all updates if so
+        if (Date.now() < data.localDeathUntil) {
+            // Still in forced death period, keep hidden and ignore this update
+            opponentModel.visible = false;
+            return;
+        }
+
         // Update last known state with any new data present in opponentData
         if (opponentData.position) data.lastState.position = { ...opponentData.position };
         if (opponentData.rotation) data.lastState.rotation = { ...opponentData.rotation };
+        if (opponentData.isDead !== undefined) data.lastState.isDead = opponentData.isDead;
+        
         // Use last known state if data is missing in this delta update
         const currentPos = opponentData.position || data.lastState.position;
         const currentRot = opponentData.rotation || data.lastState.rotation;
@@ -203,6 +214,12 @@ export class Game {
         for (const [id, model] of this.opponents) {
             const data = this.opponentsData.get(id);
             if (!data || data.buffer.length < 2) continue;
+
+            // ✅ FIX: Respect local death timer during interpolation too
+            if (Date.now() < data.localDeathUntil) {
+                model.visible = false;
+                continue;
+            }
 
             const buffer = data.buffer;
 
@@ -284,7 +301,7 @@ export class Game {
 
         if (data.shooterId === this.network.playerId) {
             const shooter = 'You';
-            const victim = data.victimNickname || 'Enemy';
+            const victim = data.victomNickname || 'Enemy';
             this.ui.showHitMarker(data.hitbox === 'HEAD');
 
             if (data.fatal) {
