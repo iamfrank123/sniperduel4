@@ -308,15 +308,15 @@ export class Game {
             this.player.die();
         } else {
             // IMMEDIATE HIDDEN FIX: Hide opponent immediately when death event arrives
-            // Don't wait for next state tick to avoid any delay
             const opponent = this.opponents.get(data.victimId);
             if (opponent) {
-                opponent.visible = false;
+                opponent.visible = false; // Instant hide
 
-                // Also clear interpolation buffer to be safe
                 const oppData = this.opponentsData.get(data.victimId);
                 if (oppData) {
                     oppData.buffer = [];
+                    oppData.localDeathUntil = Date.now() + 1500; // Force hidden locally for 1.5s (covering most of respawn time)
+                    oppData.lastState.isDead = true; // Assume dead in persistent state too
                 }
             }
         }
